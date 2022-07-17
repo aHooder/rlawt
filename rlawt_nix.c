@@ -29,6 +29,8 @@
 #include <jawt_md.h>
 #include <string.h>
 
+typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
+
 static XErrorEvent lastError = {0};
 static int rlawtXErrorHandler(Display *display, XErrorEvent *event) {
 	if (lastError.display == 0) {
@@ -154,7 +156,37 @@ JNIEXPORT void JNICALL Java_net_runelite_rlawt_AWTContext_createGLContext(JNIEnv
 		goto freeDisplay;
 	}
 
-	ctx->context = glXCreateNewContext(ctx->dpy, fbConfig, GLX_RGBA_TYPE, NULL, true);
+	const char *extensions = glXQueryExtensionsString(ctx->dpy, screen);
+	if (strstr(extensions, "GLX_ARB_create_context")) {
+		// This is basically ripped from https://www.khronos.org/opengl/wiki/Tutorial:_OpenGL_3.0_Context_Creation_(GLX)
+		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
+			(glXCreateContextAttribsARBProc) glXGetProcAddressARB((const GLubyte*) "glXCreateContextAttribsARB");
+		int context_attribs[] = {
+			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+			GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+			GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+			None
+		};
+
+		ctx->context = glXCreateContextAttribsARB(ctx->dpy, fbConfig, 0, true, context_attribs);
+
+		XSync(ctx->dpy, false);
+		if (!ctx->context) {
+			// Couldn't create GL 3.0 context.  Fall back to old-style 2.x context.
+			// When a context version below 3.0 is requested, implementations will
+			// return the newest context version compatible with OpenGL versions less
+			// than version 3.0.
+			// GLX_CONTEXT_MAJOR_VERSION_ARB = 1
+			context_attribs[1] = 1;
+			// GLX_CONTEXT_MINOR_VERSION_ARB = 0
+			context_attribs[3] = 0;
+
+			ctx->context = glXCreateContextAttribsARB(ctx->dpy, fbConfig, 0, false, context_attribs);
+		}
+	} else {
+		ctx->context = glXCreateNewContext(ctx->dpy, fbConfig, GLX_RGBA_TYPE, NULL, true);
+	}
+
 
 	if (!ctx->context) {
 		rlawtThrow(env, "unable to create glx context");
@@ -165,7 +197,6 @@ JNIEXPORT void JNICALL Java_net_runelite_rlawt_AWTContext_createGLContext(JNIEnv
 		goto freeContext;
 	}
 
-	const char *extensions = glXQueryExtensionsString(ctx->dpy, screen);
 	if (strstr(extensions, "GLX_EXT_swap_control")) {
 		ctx->glXSwapIntervalEXT = (PFNGLXSWAPINTERVALEXTPROC) glXGetProcAddress("glXSwapIntervalEXT");
 		ctx->glxSwapControlTear = !!strstr(extensions, "GLX_EXT_swap_control_tear");
