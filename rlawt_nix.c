@@ -162,9 +162,7 @@ JNIEXPORT void JNICALL Java_net_runelite_rlawt_AWTContext_createGLContext(JNIEnv
 		glXCreateContextAttribsARBProc glXCreateContextAttribsARB =
 			(glXCreateContextAttribsARBProc) glXGetProcAddressARB((const GLubyte*) "glXCreateContextAttribsARB");
 		int context_attribs[] = {
-			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-			GLX_CONTEXT_MINOR_VERSION_ARB, 0,
-			GLX_CONTEXT_PROFILE_MASK_ARB,  GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+			GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
 			None
 		};
 
@@ -176,11 +174,12 @@ JNIEXPORT void JNICALL Java_net_runelite_rlawt_AWTContext_createGLContext(JNIEnv
 			// When a context version below 3.0 is requested, implementations will
 			// return the newest context version compatible with OpenGL versions less
 			// than version 3.0.
-			// GLX_CONTEXT_MAJOR_VERSION_ARB = 1
-			context_attribs[1] = 1;
-			// GLX_CONTEXT_MINOR_VERSION_ARB = 0
-			context_attribs[3] = 0;
-
+			int context_attribs[] = {
+				GLX_CONTEXT_MAJOR_VERSION_ARB, 1,
+				GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+				GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+				None
+			};
 			ctx->context = glXCreateContextAttribsARB(ctx->dpy, fbConfig, 0, false, context_attribs);
 		}
 	} else {
